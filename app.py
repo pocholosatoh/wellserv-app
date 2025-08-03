@@ -2,10 +2,12 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-
 import base64
-st.set_page_config(page_title="WellServ App", page_icon="favicon.png", layout="wide")
 
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="WELLSERV APP", page_icon="favicon.png", layout="wide")
+
+# --- FAVICON SETUP ---
 def set_custom_favicon(icon_path):
     with open(icon_path, "rb") as f:
         img_data = f.read()
@@ -15,20 +17,24 @@ def set_custom_favicon(icon_path):
     """
     st.markdown(favicon_html, unsafe_allow_html=True)
 
-# --- STREAMLIT SETTINGS ---
-st.set_page_config(page_title="WellServ App", layout="wide")
 set_custom_favicon("favicon.png")
+
+# --- HEADER ---
 st.title("🧪 WellServ Patient Records")
 st.subheader("🧪 July")
 
-# --- GOOGLE SHEETS SETUP ---
-CREDENTIALS_FILE = 'wellserv-creds.json'
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1De30TwfsBFMXEA5vqE721Db4AhCdWquNoTavWV8Dz90"
+# --- GOOGLE SHEETS AUTHENTICATION ---
+from oauth2client.service_account import ServiceAccountCredentials
+import streamlit as st
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
+creds_dict = st.secrets["gcp_service_account"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
+
+# --- LOAD SHEETS ---
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1De30TwfsBFMXEA5vqE721Db4AhCdWquNoTavWV8Dz90"
 sheet = client.open_by_url(SHEET_URL)
 db_ws = sheet.worksheet("Database")
 notes_ws = sheet.worksheet("Doctor's Notes")
@@ -37,11 +43,9 @@ notes_ws = sheet.worksheet("Doctor's Notes")
 df_db = pd.DataFrame(db_ws.get_all_records())
 df_notes = pd.DataFrame(notes_ws.get_all_records())
 
-# Normalize all column names
+# Normalize column names and strip cell whitespace
 df_db.columns = df_db.columns.str.strip().str.upper()
 df_notes.columns = df_notes.columns.str.strip().str.upper()
-
-# Strip whitespace from cell values
 df_db = df_db.astype(str).applymap(lambda x: x.strip())
 df_notes = df_notes.astype(str).applymap(lambda x: x.strip())
 
@@ -57,14 +61,13 @@ if search:
         st.write("🧾 **Patient Info:**")
         st.dataframe(filtered_db.reset_index(drop=True).style.hide(axis='index'))
 
-        # Match doctor notes by PATIENT ID
         pid = filtered_db.iloc[0]["PATIENT ID"].upper()
         filtered_notes = df_notes[df_notes["PATIENT ID"] == pid]
 
         if not filtered_notes.empty:
             st.write("🩺 **Doctor's Notes & Prescriptions:**")
             filtered_notes_display = filtered_notes.reset_index(drop=True)
-            filtered_notes_display.index += 1  # 1-based index
+            filtered_notes_display.index += 1
             st.dataframe(filtered_notes_display)
         else:
             st.info("No doctor's notes found for this patient.")
@@ -73,7 +76,7 @@ if search:
 else:
     st.dataframe(df_db.reset_index(drop=True).style.hide(axis='index'))
 
-# --- FORM TO ADD NOTE ---
+# --- ADD NOTE FORM ---
 st.subheader("🩺 Add Doctor's Note")
 
 with st.form("doctor_note_form", clear_on_submit=True):
